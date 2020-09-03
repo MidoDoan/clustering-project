@@ -250,15 +250,19 @@ void ConnectivityMatrix::GetTotalPDR (std::vector<uint64_t> packet_src, uint32_t
       nodePDR[packet_src[i]].push_back (individualPDR);
     }
   for (uint32_t i = 0; i < nodePDR.size ();i++){
-    if(nodePDR[i].size()!=0){
-        avgNodePDR.push_back (std::accumulate (nodePDR[i].begin (), nodePDR[i].end (), 0.0) /
-                              nodePDR[i].size ());
+      double avgNodePdr;
+      if (nodePDR[i].size () != 0)
+        {
+          avgNodePdr =
+              std::accumulate (nodePDR[i].begin (), nodePDR[i].end (), 0.0) / nodePDR[i].size ();
+          avgNodePDR.push_back (avgNodePdr);
+          std::cout << "The avg PDR of node send: " << i << " :" << avgNodePdr << std::endl;
+        }
+    
     }
-      
-    }
-  for (uint32_t i = 0; i < avgNodePDR.size (); i++){
-      std::cout << "The avg PDR of node send: " << i << ": " << avgNodePDR[i] << std::endl;
-    }
+  // for (uint32_t i = 0; i < avgNodePDR.size (); i++){
+  //     std::cout << "The avg PDR of node send: " << avgNodePDR[i] << std::endl;
+  //   }
   double totalAVGPDR = std::accumulate (avgNodePDR.begin (),avgNodePDR.end (), 0.0) /
                             avgNodePDR.size ();
   std::cout << "The total avg PDR: " << totalAVGPDR << std::endl;

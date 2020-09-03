@@ -37,11 +37,11 @@
 
 #define REBRCT_NUM 3
 #define Communication_range 50
-#define NODE_NUM 3
+// #define NODE_NUM 10
 #define LANE_NUM 3
 #define LANE_WIDTH 2
-#define PACKET_NUM 10
-#define SENDER_NUM 2
+// #define PACKET_NUM 1
+// #define SENDER_NUM 1
 using namespace ns3;
 /**
  * This simulation is to show the routing service of WaveNetDevice described in IEEE 09.4.
@@ -54,29 +54,18 @@ using namespace ns3;
 class WaveNetDeviceExample
 {
 public:
+  WaveNetDeviceExample (uint64_t node_num, uint64_t sender_num, uint64_t packet_num, uint64_t mode)
+  {
+    NODE_NUM = node_num;
+    SENDER_NUM = sender_num;
+    PACKET_NUM = packet_num;
+    MODE = mode;
+  }
   void SendPacket (void);
 
 private:
-  /**
-   * Send one WSMP packet function
-   * \param channel the channel to use
-   * \param seq the sequence
-   */
-  void SendOnePacket (uint32_t channel, uint32_t seq, uint32_t sender_id);
-  /**
-   * Send IP packet function
-   * \param seq the sequence
-   * \param ipv6 true if IPV6
-   */
-  void SendIpPacket (uint32_t seq, bool ipv6);
-  /**
-   * Receive function
-   * \param dev the device
-   * \param pkt the packet
-   * \param mode the mode
-   * \param sender the sender address
-   * \returns true if successful
-   */
+  
+
   bool Receive (Ptr<NetDevice> dev, Ptr<const Packet> pkt, uint16_t mode, const Address &sender);
   /**
    * Receive VSA function
@@ -84,8 +73,7 @@ private:
    * \param address the address
    * \returns true if successful
    */
-  bool ReceiveVsa (Ptr<const Packet> pkt, const Address &address, uint32_t, uint32_t);
-  /// Create WAVE nodes function
+  
   void CreateWaveNodes (void);
   void CreateWaveNodeCustomMobility (std::string file_path);
   std::string MactoString (Address const &sender);
@@ -104,6 +92,10 @@ private:
   std::vector < uint64_t > packetSrc;
   void ScheduleSendPacket (Time time, uint64_t channel, uint64_t sender_id,
                            uint64_t packet_count);
+  uint64_t NODE_NUM;
+  uint64_t SENDER_NUM;
+  uint64_t PACKET_NUM;
+  uint64_t MODE;
 
   // double delay_arr[getDeviceNum()];
 };
@@ -115,10 +107,7 @@ WaveNetDeviceExample::CreateWaveNodeCustomMobility (std::string file_path)
   nodes = posInfo.GetContainer (LANE_NUM, LANE_WIDTH, NODE_NUM);
   std::cout << nodes.GetN () << std::endl;
 
-  // positionAlloc->Add(Vector(5.0, 0.0, 0.0));
-  // mobility.SetPositionAllocator (positionAlloc);
-  // mobility.SetMobilityModel ("ns3::ConstantVelocityMobilityModel");
-  // mobility.Install (nodes);
+  
   for (uint32_t i = 0; i != nodes.GetN (); ++i)
     {
       Ptr<ConstantVelocityMobilityModel> mob =
@@ -199,15 +188,20 @@ WaveNetDeviceExample::Receive (Ptr<NetDevice> dev, Ptr<const Packet> pkt, uint16
   // conn_mat.InsertEntry (sender_id, node_pos, 1);
   // delay_mat.InsertEntry (sender_id, node_pos, Now ().GetSeconds () - header.GetTs ().GetSeconds ());
   /*This function is for rebroadcast packet*/
-  if ((rebroadcast_check[header.GetPacketId ()][node_pos] < REBRCT_NUM) &&
-      (node_pos != header.GetSeq ()))
-    {
-      std::cout << "Begin forwarding packet:" << std::endl;
+  if(MODE==2){
+    if ((rebroadcast_check[header.GetPacketId ()][node_pos] < REBRCT_NUM) &&
+        (node_pos != header.GetSeq ()))
+      {
+        std::cout << "Begin forwarding packet:" << std::endl;
 
-      Simulator::Schedule (Seconds (Now ().GetSeconds ()), &WaveNetDeviceExample::ReBroadcastPacket,
-                           this, SCH1, header.GetSeq (), node_pos, p);
-      rebroadcast_check[header.GetPacketId ()][node_pos]++;
-    }
+        Simulator::Schedule (Seconds (0.05), &WaveNetDeviceExample::ReBroadcastPacket, this, SCH1,
+                              header.GetSeq (), node_pos, p);
+        std::cout << Now ().GetSeconds () << std::endl;
+        rebroadcast_check[header.GetPacketId ()][node_pos]++;
+      }
+  }
+  // else
+  //   std::cout << "BUG" << std::endl;
 
   return true;
 }
@@ -283,29 +277,10 @@ WaveNetDeviceExample::SendPacketCustomHeader (uint32_t channel, uint64_t seq, ui
   m_header.SetPacketId (packet_id);
   p->AddHeader (m_header);
   // packetSrc.push_back (sender_id);
+  std::cout << sender_id << std::endl;
   sender->SendX (p, bssWildcard, WSMP_PROT_NUMBER, txInfo);
 }
 
-// void
-// WaveNetDeviceExample::SendPacketCustomHeader (uint32_t channel, uint64_t seq, uint32_t sender_id)
-// {
-//   Ptr<WaveNetDevice> sender = DynamicCast<WaveNetDevice> (devices.Get (sender_id));
-//   // const static uint16_t WSMP_PROT_NUMBER = 0x88DC;
-//   Mac48Address bssWildcard = Mac48Address::GetBroadcast ();
-
-//   // const TxInfo txInfo = TxInfo (channel);
-//   Ptr<Packet> p = Create<Packet> (100);
-//   MyHeader m_header;
-//   m_header.SetSeq (seq);
-
-//   p->AddHeader (m_header);
-//   const TxProfile txProfile = TxProfile (SCH1);
-//   sender->RegisterTxProfile (txProfile);
-//   sender->Send (p, bssWildcard, 0);imulator::Schedule (Seconds (0.003), &WaveNetDeviceExample::SendPacketCustomHeader, this, SCH1,
-//                      0, 0, 0);
-// Simulator::Schedule (Seconds (0.013), &WaveNetDeviceExample::SendPacketCustomHeader, this, SCH1,
-//                      0, 0, 1);
-// }
 void
 WaveNetDeviceExample::ReBroadcastPacket (uint32_t channel, uint32_t seq, uint32_t sender_id,
                                          Ptr<Packet> pkt)
@@ -316,18 +291,7 @@ WaveNetDeviceExample::ReBroadcastPacket (uint32_t channel, uint32_t seq, uint32_
   const TxInfo txInfo = TxInfo (channel);
   sender->SendX (pkt, bssWildcard, WSMP_PROT_NUMBER, txInfo);
 }
-// void
-// WaveNetDeviceExample::ReBroadcastPacket (uint32_t channel, uint32_t seq, uint32_t sender_id,
-//                                          Ptr<Packet> pkt)
-// {
-//   Ptr<WaveNetDevice> sender = DynamicCast<WaveNetDevice> (devices.Get (sender_id));
-//   // const static uint16_t WSMP_PROT_NUMBER = 0x88DC;
-//   Mac48Address bssWildcard = Mac48Address::GetBroadcast ();
-//   // const TxInfo txInfo = TxInfo (channel);
-//   const TxProfile txProfile = TxProfile (SCH1);
-//   sender->RegisterTxProfile (txProfile);
-//   sender->Send (pkt, bssWildcard, 0);
-// }
+
 
 void
 WaveNetDeviceExample::SendPacket ()
@@ -345,36 +309,34 @@ WaveNetDeviceExample::SendPacket ()
       Ptr<WaveNetDevice> receiver = DynamicCast<WaveNetDevice> (devices.Get (i));
       Simulator::Schedule (Seconds (0.0), &WaveNetDevice::StartSch, receiver, schInfo);
       // release SCH access
-      Simulator::Schedule (Seconds (5.0), &WaveNetDevice::StopSch, sender, SCH1);
-      Simulator::Schedule (Seconds (5.0), &WaveNetDevice::StopSch, receiver, SCH1);
+      Simulator::Schedule (Seconds (20.01), &WaveNetDevice::StopSch, sender, SCH1);
+      Simulator::Schedule (Seconds (20.01), &WaveNetDevice::StopSch, receiver, SCH1);
     }
 
-  // for (uint32_t i = 0; i != devices.GetN (); ++i)
-  //   {
-  //     Ptr<WaveNetDevice> receiver = DynamicCast<WaveNetDevice> (devices.Get (i));
-  //     Simulator::Schedule (Seconds (0.0), &WaveNetDevice::StartSch, receiver, schInfo);
-  //     Simulator::Schedule (Seconds (5.0), &WaveNetDevice::StopSch, receiver, SCH1);
-  //   }
-  // Simulator::Schedule (Seconds (0.003), &WaveNetDeviceExample::SendPacketCustomHeader, this, SCH1,
-  //                      0, 0, 0);
-  // Simulator::Schedule (Seconds (0.013), &WaveNetDeviceExample::SendPacketCustomHeader, this, SCH1,
-  //                      0, 0, 1);
+  
   for (uint64_t i = 0; i < PACKET_NUM; i++){
-      Simulator::Schedule (Seconds (0.003+(0.1*i)), &WaveNetDeviceExample::SendPacketCustomHeader, this,
-                           SCH1, 0, 0, i);
-      packetSrc[i] = 0;
-      Simulator::Schedule (Seconds (0.004 + (0.1 * i)),
-                           &WaveNetDeviceExample::SendPacketCustomHeader, this, SCH1, 1, 1,
-                           i + PACKET_NUM);
-      packetSrc[i + PACKET_NUM] = 1;
-    }
-    // for (uint32_t i = 0; i != devices.GetN (); ++i)
-    //   {
-    //     Simulator::Schedule (Seconds(0.002*(i+1)), &WaveNetDeviceExample::SendPacketCustomHeader, this,
-    //                          SCH1, i, i);
-    //   }
+    switch(SENDER_NUM){
+      case 1:
+        Simulator::Schedule (Seconds (0.01 + (0.1 * i)),
+                             &WaveNetDeviceExample::SendPacketCustomHeader, this, SCH1, 0, 0, i);
+        packetSrc[i] = 0;
+        break;
+      case 2:
+        Simulator::Schedule (Seconds (0.01 + (0.1 * i)),
+                             &WaveNetDeviceExample::SendPacketCustomHeader, this, SCH1, 0, 0, i);
+        packetSrc[i] = 0;
+        Simulator::Schedule (Seconds (0.06+ (0.1 * i)),
+                             &WaveNetDeviceExample::SendPacketCustomHeader, this, SCH1, 1, 1,
+                             i + PACKET_NUM);
+        packetSrc[i + PACKET_NUM] = 1;
+        break;
+      default:
+        break;
+      }
+  }
+    
 
-    Simulator::Stop (Seconds (5.0));
+  Simulator::Stop (Seconds (20.01));
   Simulator::Run ();
   Simulator::Destroy ();
 
@@ -387,10 +349,7 @@ WaveNetDeviceExample::SendPacket ()
   delay_mat.PrintMatrix ();
   delay_mat.SetDelayIdxVec (packetSrc, SENDER_NUM);
   std::cout << "The total avg delay index: " << delay_mat.GetTotalAvgDelayIdx () << std::endl;
-  // std::cout << delay_mat.GetNeighborNum (0) << std::endl;
-
-  // std::cout << "The avg delay index: " << delay_mat.GetAvgDelayIndex () << std::endl;
-  // conn_mat.GetReceiveNodeNum (0);
+  
   delay_mat.GetTotalPDR (packetSrc, SENDER_NUM);
   // double min_delay_index = delay_mat.GetMinDelayIndex ();
   // std::cout << min_delay_index << std::endl;
@@ -414,73 +373,25 @@ WaveNetDeviceExample::ScheduleSendPacket (Time time, uint64_t channel, uint64_t 
 {
   Simulator::Schedule (time, &WaveNetDeviceExample::SendPacketCustomHeader, this, channel, sender_id,sender_id,packet_count);
 }
-// void
-// WaveNetDeviceExample::SendPacket ()
-// {
-//   CreateWaveNodeCustomMobility ("position.txt");
-//   // Ptr<WaveNetDevice> sender = DynamicCast<WaveNetDevice>(devices.Get(12));
 
-//   const SchInfo schInfo = SchInfo (SCH1, false, EXTENDED_ALTERNATING);
-//   // Simulator::Schedule (Seconds (0.0), &WaveNetDevice::StartSch, sender, schInfo);
-//   // const TxProfile txProfile = TxProfile (SCH1);
-//   for (uint32_t i = 0; i != devices.GetN (); ++i)
-//     {
-//       Ptr<WaveNetDevice> sender = DynamicCast<WaveNetDevice> (devices.Get (i));
-//       Simulator::Schedule (Seconds (0.0), &WaveNetDevice::StartSch, sender, schInfo);
-//       Ptr<WaveNetDevice> receiver = DynamicCast<WaveNetDevice> (devices.Get (i));
-//       Simulator::Schedule (Seconds (0.0), &WaveNetDevice::StartSch, receiver, schInfo);
-//       // Simulator::Schedule (Seconds (0.001), &WaveNetDevice::RegisterTxProfile, sender, txProfile);
-//       Simulator::Schedule (Seconds (5.0), &WaveNetDevice::DeleteTxProfile, sender, SCH1);
-//       Simulator::Schedule (Seconds (5.0), &WaveNetDevice::StopSch, receiver, SCH1);
-//       // release SCH access
-//       Simulator::Schedule (Seconds (5.0), &WaveNetDevice::StopSch, sender, SCH1);
-//     }
-
-//   // for (uint32_t i = 0; i != devices.GetN (); ++i)
-//   //   {
-//   //     Ptr<WaveNetDevice> receiver = DynamicCast<WaveNetDevice> (devices.Get (i));
-//   //     Simulator::Schedule (Seconds (0.0), &WaveNetDevice::StartSch, receiver, schInfo);
-//   //     Simulator::Schedule (Seconds (5.0), &WaveNetDevice::StopSch, receiver, SCH1);
-//   //   }
-//   Simulator::Schedule (Seconds (0.003), &WaveNetDeviceExample::SendPacketCustomHeader, this, SCH1,
-//                        0, 0);
-//   // for (uint32_t i = 0; i != devices.GetN (); ++i)
-//   //   {
-//   //     Simulator::Schedule (Seconds(0.002*(i+1)), &WaveNetDeviceExample::SendPacketCustomHeader, this,
-//   //                          SCH1, i, i);
-//   //   }
-
-//   Simulator::Stop (Seconds (5.0));
-//   Simulator::Run ();
-//   Simulator::Destroy ();
-
-//   conn_mat.PrintMatrix ();
-
-//   std::cout << std::endl;
-//   // conn_mat.GetNeighbors ();
-//   std::cout << std::endl;
-//   delay_mat.SetNeighborMatrix ();
-//   delay_mat.PrintMatrix ();
-//   delay_mat.GetDelayIndexes ();
-
-//   std::cout << "The avg delay index: " << delay_mat.GetAvgDelayIndex () << std::endl;
-//   conn_mat.GetReceiveNodeNum (0);
-//   // double min_delay_index = delay_mat.GetMinDelayIndex ();
-//   // std::cout << min_delay_index << std::endl;
-//   std::cout << "rebroadcast check:" << std::endl;
-//   for (uint32_t i = 0; i < rebroadcast_check.size (); i++)
-//     {
-//       std::cout << "Node " << i << " rebroadcast " << rebroadcast_check[i] << " times" << std::endl;
-//     }
-// }
 
 int
 main (int argc, char *argv[])
 {
   CommandLine cmd;
+  uint64_t node_num;
+  uint64_t sender_num;
+  uint64_t packet_num;
+  uint64_t mode;
+
+  cmd.AddValue ("NODE_NUM", "number of node", node_num);
+  cmd.AddValue ("SENDER_NUM", "number of sender", sender_num);
+  cmd.AddValue ("PACKET_NUM", "number of packet", packet_num);
+  cmd.AddValue ("MODE", "mode", mode);
+
   cmd.Parse (argc, argv);
 
-  WaveNetDeviceExample example;
+  WaveNetDeviceExample example(node_num, sender_num, packet_num, mode);
   std::cout << "run WAVE  example case:" << std::endl;
   example.SendPacket ();
 
