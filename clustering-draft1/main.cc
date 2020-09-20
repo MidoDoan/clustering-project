@@ -44,43 +44,25 @@
 #define BeaconExTime 5
 #define ClusterFormationTime 5
 #define DataExchangeTime 30
-// #define NODE_NUM 10
 #define LANE_NUM 3
 #define LANE_WIDTH 2
-// #define PACKET_NUM 1
-// #define SENDER_NUM 1
+#define t0 0.7
 using namespace ns3;
-/**
- * This simulation is to show the routing service of WaveNetDevice described in IEEE 09.4.
- *
- * note: although txPowerLevel is supported now, the "TxPowerLevels"
- * attribute of YansWifiPhy is 1 which means phy devices only support 1
- * levels. Thus, if users want to control txPowerLevel, they should set
- * these attributes of YansWifiPhy by themselves..
- */
-class WaveNetDeviceExample
+
+class ClusteringProtocol
 {
 public:
-  WaveNetDeviceExample (uint64_t node_num, uint64_t sender_num, uint64_t packet_num)
+  ClusteringProtocol (uint64_t node_num, uint64_t sender_num, uint64_t packet_num)
   {
     NODE_NUM = node_num;
     SENDER_NUM = sender_num;
     PACKET_NUM = packet_num;
   }
-  /// Send WSMP example function
   void SendPacketExample (void);
 
 private:
   bool Receive (Ptr<NetDevice> dev, Ptr<const Packet> pkt, uint16_t mode, const Address &sender);
-  /**
-   * Receive VSA function
-   * \param pkt the packet
-   * \param address the address
-   * \returns true if successful
-   */
-  bool ReceiveVsa (Ptr<const Packet> pkt, const Address &address, uint64_t, uint64_t);
-  /// Create WAVE nodes function
-  void CreateWaveNodes (void);
+
   void CreateWaveNodeCustomMobility (std::string file_path);
   std::string MactoString (Address const &sender);
   uint64_t MactoInt (std::string const &s);
@@ -88,9 +70,6 @@ private:
   NetDeviceContainer devices; ///< the devices
   Ptr<WaveNetDevice> device;
 
-  std::vector<uint64_t> rebroadcast_check;
-  // void InitiateRebroadcastMatrix (uint64_t node_num);
-  // void ReBroadcastPacket (uint64_t channel, uint64_t seq, uint64_t sender_id, Ptr<Packet> pkt);
   void SendPacket (uint64_t channel, uint64_t sender_id, uint64_t process, uint64_t receiver_id,
                    uint64_t packet_id);
 
@@ -102,7 +81,6 @@ private:
   std::vector<ClusterSupport::NodeInfo> nodeInfoList;
   void ScheduleSendPacket (Time time, uint64_t channel, uint64_t sender_id, uint64_t process,
                            uint64_t packet_id);
-  void ScheduleSendPacket1 (Time time, uint64_t channel, uint64_t sender_id);
   void InitiateNodeInfo ();
   void UpdateAllNodeInfo ();
   void UpdateNodeInfo (uint64_t node_id, ClusterSupport::NodeDegree degree, uint64_t cluster_id,
@@ -111,11 +89,9 @@ private:
   void PrintNodeListInfo ();
   void SetTwaitArr ();
   void ReBroadcastPacket (uint32_t channel, uint64_t sender_id, Ptr<Packet> pkt);
-  uint32_t rebroadcast_count = 0;
   std::vector<uint64_t> packetSrc;
 
   void ScheduleUpdate (uint64_t process, uint64_t sender_id, uint64_t channel, uint64_t packet_id);
-  // float delay_arr[getDeviceNum()];
   uint64_t NODE_NUM;
   uint64_t SENDER_NUM;
   uint64_t PACKET_NUM;
@@ -126,7 +102,7 @@ private:
   void PrintClusterList ();
 };
 void
-WaveNetDeviceExample::SetClusterIdList ()
+ClusteringProtocol::SetClusterIdList ()
 {
   // Save Cluster Id of nodes in NodeListInfo to a vector
   std::vector<uint64_t> clusterIdVec; // contain cluster id which can be duplicated
@@ -155,7 +131,7 @@ WaveNetDeviceExample::SetClusterIdList ()
   std::cout << std::endl;
 }
 void
-WaveNetDeviceExample::SetClusterList ()
+ClusteringProtocol::SetClusterList ()
 {
   for (uint64_t i = 0; i < clusterId.size (); i++)
     {
@@ -171,25 +147,27 @@ WaveNetDeviceExample::SetClusterList ()
       clusterList.insert (std::pair<uint64_t, std::vector<uint64_t>> (clusterId[i], clusterMember));
     }
 }
-void WaveNetDeviceExample::PrintClusterList (){
+void
+ClusteringProtocol::PrintClusterList ()
+{
   SetClusterIdList ();
   SetClusterList ();
   std::cout << "CH \t CM" << std::endl;
   for (std::map<uint64_t, std::vector<uint64_t>>::const_iterator it = clusterList.begin ();
        it != clusterList.end (); ++it)
     {
-      std:: cout << it->first << ":\t ";
-      for (std::vector<uint64_t>::const_iterator b = it->second.begin (); b != it->second.end (); ++b)
+      std::cout << it->first << ":\t ";
+      for (std::vector<uint64_t>::const_iterator b = it->second.begin (); b != it->second.end ();
+           ++b)
         {
-          std:: cout << *b<<" ";
+          std::cout << *b << " ";
         }
       std::cout << std::endl;
     }
 }
 
-/*My Function*/
 void
-WaveNetDeviceExample::CreateWaveNodeCustomMobility (std::string file_path)
+ClusteringProtocol::CreateWaveNodeCustomMobility (std::string file_path)
 {
   Position posInfo = Position (file_path);
   nodes = posInfo.GetContainer (LANE_NUM, LANE_WIDTH, NODE_NUM);
@@ -200,10 +178,7 @@ WaveNetDeviceExample::CreateWaveNodeCustomMobility (std::string file_path)
     {
       Ptr<ConstantVelocityMobilityModel> mob =
           nodes.Get (i)->GetObject<ConstantVelocityMobilityModel> ();
-      // Ptr<ConstantVelocityMobilityModel> mob = DynamicCast<ConstantVelocityMobilityModel>(nodes.Get(i))
       mob->SetVelocity (Vector (20.0, 0.0, 0.0));
-      // Vector pos = mob->GetPosition ();
-      // std::cout << pos << std::endl;
     }
 
   InitiateNodeInfo ();
@@ -219,12 +194,10 @@ WaveNetDeviceExample::CreateWaveNodeCustomMobility (std::string file_path)
   conn_mat.InitiateMatrix (devices.GetN (), devices.GetN ());
   delay_mat.InitiateMatrix (PACKET_NUM * SENDER_NUM, devices.GetN ());
   packetSrc.resize (SENDER_NUM * PACKET_NUM);
-  // InitiateRebroadcastMatrix (devices.GetN ());
   for (uint64_t i = 0; i != devices.GetN (); ++i)
     {
       device = DynamicCast<WaveNetDevice> (devices.Get (i));
-      device->SetReceiveCallback (MakeCallback (&WaveNetDeviceExample::Receive, this));
-      // device->SetWaveVsaCallback(MakeCallback(&WaveNetDeviceExample::ReceiveVsa, this));
+      device->SetReceiveCallback (MakeCallback (&ClusteringProtocol::Receive, this));
     }
   PrintNodeListInfo ();
 
@@ -233,7 +206,7 @@ WaveNetDeviceExample::CreateWaveNodeCustomMobility (std::string file_path)
 }
 
 void
-WaveNetDeviceExample::InitiateNodeInfo ()
+ClusteringProtocol::InitiateNodeInfo ()
 {
   for (uint64_t i = 0; i != nodes.GetN (); ++i)
     {
@@ -253,7 +226,7 @@ WaveNetDeviceExample::InitiateNodeInfo ()
 }
 
 void
-WaveNetDeviceExample::UpdateAllNodeInfo ()
+ClusteringProtocol::UpdateAllNodeInfo ()
 {
   for (uint64_t i = 0; i < nodeInfoList.size (); i++)
     {
@@ -271,7 +244,7 @@ WaveNetDeviceExample::UpdateAllNodeInfo ()
 }
 
 void
-WaveNetDeviceExample::UpdateNodeInfo (uint64_t node_id, ClusterSupport::NodeDegree degree,
+ClusteringProtocol::UpdateNodeInfo (uint64_t node_id, ClusterSupport::NodeDegree degree,
                                       uint64_t cluster_id, double posX, double posY, double posZ,
                                       double velX, double velY, double velZ)
 {
@@ -287,7 +260,7 @@ WaveNetDeviceExample::UpdateNodeInfo (uint64_t node_id, ClusterSupport::NodeDegr
 
 /*This function for converting Mac address to String*/
 std::string
-WaveNetDeviceExample::MactoString (const Address &sender)
+ClusteringProtocol::MactoString (const Address &sender)
 {
   AddressValue address_val = AddressValue (sender);
   std::string mac_string;
@@ -300,7 +273,7 @@ WaveNetDeviceExample::MactoString (const Address &sender)
 
 /*This function for converting Mac string address to int */
 uint64_t
-WaveNetDeviceExample::MactoInt (std::string const &s)
+ClusteringProtocol::MactoInt (std::string const &s)
 {
   unsigned char a[6];
   int last = -1;
@@ -319,7 +292,7 @@ WaveNetDeviceExample::MactoInt (std::string const &s)
 /*end function*/
 
 void
-WaveNetDeviceExample::SendPacket (uint64_t channel, uint64_t sender_id, uint64_t process,
+ClusteringProtocol::SendPacket (uint64_t channel, uint64_t sender_id, uint64_t process,
                                   uint64_t receiver_id, uint64_t packet_id)
 {
   switch (process)
@@ -328,10 +301,7 @@ WaveNetDeviceExample::SendPacket (uint64_t channel, uint64_t sender_id, uint64_t
       if (Now ().GetSeconds () < BeaconExTime)
         {
           Ptr<WaveNetDevice> sender = DynamicCast<WaveNetDevice> (devices.Get (sender_id));
-          // const static uint16_t WSMP_PROT_NUMBER = 0x88DC;
           Mac48Address dest = Mac48Address::GetBroadcast ();
-
-          // const TxProfile txProfile = TxProfile (SCH1);
 
           Ptr<Packet> p = Create<Packet> (100);
 
@@ -363,7 +333,6 @@ WaveNetDeviceExample::SendPacket (uint64_t channel, uint64_t sender_id, uint64_t
         std::cout << "DONE BEACON EXCHANGE" << std::endl;
       break;
     case 2:
-      // SetTwaitArr ();
       if (Now ().GetSeconds () < ClusterFormationTime + BeaconExTime)
         {
           if (nodeInfoList[sender_id].degree != ClusterSupport::CM)
@@ -396,11 +365,10 @@ WaveNetDeviceExample::SendPacket (uint64_t channel, uint64_t sender_id, uint64_t
       break;
     case 3:
 
-      if (Now ().GetSeconds () < ClusterFormationTime + BeaconExTime + DataExchangeTime + 0.06)
+      if (Now ().GetSeconds () < ClusterFormationTime + BeaconExTime + DataExchangeTime + t0)
         {
 
           Ptr<WaveNetDevice> sender = DynamicCast<WaveNetDevice> (devices.Get (sender_id));
-          // Ptr<WaveNetDevice> receiver = DynamicCast<WaveNetDevice> (devices.Get (receiver_id));
           Ptr<WaveNetDevice> clusterHead =
               DynamicCast<WaveNetDevice> (devices.Get (nodeInfoList[sender_id].clusterId));
           DataPacketHeader dataHeader;
@@ -424,61 +392,46 @@ WaveNetDeviceExample::SendPacket (uint64_t channel, uint64_t sender_id, uint64_t
     }
 }
 void
-WaveNetDeviceExample::ScheduleUpdate (uint64_t process, uint64_t sender_id, uint64_t channel,
+ClusteringProtocol::ScheduleUpdate (uint64_t process, uint64_t sender_id, uint64_t channel,
                                       uint64_t packet_id)
 {
   switch (process)
     {
     case 1:
-      WaveNetDeviceExample::ScheduleSendPacket (Seconds (0.0), channel, sender_id, process,
+      ClusteringProtocol::ScheduleSendPacket (Seconds (0.0), channel, sender_id, process,
                                                 packet_id);
       break;
     case 2:
       SetTwaitArr ();
-      WaveNetDeviceExample::ScheduleSendPacket (Seconds (TwaitArr[sender_id]), channel, sender_id,
+      ClusteringProtocol::ScheduleSendPacket (Seconds (TwaitArr[sender_id]), channel, sender_id,
                                                 process, packet_id);
       break;
     case 3:
-      WaveNetDeviceExample::ScheduleSendPacket (Seconds (BeaconExTime + ClusterFormationTime), SCH1,
+      ClusteringProtocol::ScheduleSendPacket (Seconds (BeaconExTime + ClusterFormationTime), SCH1,
                                                 sender_id, process, packet_id);
       break;
     }
 }
 
 void
-WaveNetDeviceExample::ScheduleSendPacket (Time time, uint64_t channel, uint64_t sender_id,
+ClusteringProtocol::ScheduleSendPacket (Time time, uint64_t channel, uint64_t sender_id,
                                           uint64_t process, uint64_t packet_id)
 {
-  Simulator::Schedule (time, &WaveNetDeviceExample::SendPacket, this, channel, sender_id, process,
+  Simulator::Schedule (time, &ClusteringProtocol::SendPacket, this, channel, sender_id, process,
                        0, packet_id);
-}
-void
-WaveNetDeviceExample::ScheduleSendPacket1 (Time time, uint64_t channel, uint64_t sender_id)
-{
-  Simulator::Schedule (time, &WaveNetDeviceExample::SendPacket, this, channel, sender_id, 2, 0, 0);
 }
 
 bool
-WaveNetDeviceExample::Receive (Ptr<NetDevice> dev, Ptr<const Packet> pkt, uint16_t mode,
+ClusteringProtocol::Receive (Ptr<NetDevice> dev, Ptr<const Packet> pkt, uint16_t mode,
                                const Address &sender)
 {
 
-  // SeqTsHeader seqTs;
-  // pkt->PeekHeader (seqTs);
   Ptr<Packet> p = pkt->Copy ();
-
-  /*Get header*/
-  // BeaconExHeader header;
-  // p->PeekHeader (header);
 
   PacketMetadata::ItemIterator iterator = p->BeginItem ();
   PacketMetadata::Item item;
   item = iterator.Next ();
-  // const std::string header_type = item.tid.GetName ();
-  // switch(header_type){
-  //   case "ns3::BeaconExHeader":
 
-  // }
   if (item.tid.GetName () == "ns3::BeaconExHeader")
     {
       BeaconExHeader header;
@@ -486,22 +439,11 @@ WaveNetDeviceExample::Receive (Ptr<NetDevice> dev, Ptr<const Packet> pkt, uint16
       Ptr<Node> node = dev->GetNode ();
       uint64_t node_pos = node->GetId ();
       Ptr<ConstantVelocityMobilityModel> mob = node->GetObject<ConstantVelocityMobilityModel> ();
-      // Vector mob_pos = mob->GetPosition ();
       Vector mob_vel = mob->GetVelocity ();
-      // double distance = mob->GetDistanceFrom (nodes.Get (rsuId)->GetObject<ConstantVelocityMobilityModel> ());
       uint64_t sender_id = MactoInt (MactoString (sender)) - 1;
 
-      /*Check if that node receive the packet or not*/
-      // if (conn_mat.GetElement (seqTs.GetSeq () - 1, node_pos) == 0)
-      //   {
-      //     delay_mat.InsertEntry (seqTs.GetSeq () - 1, node_pos,
-      //                            Now ().GetSeconds () - seqTs.GetTs ().GetSeconds ());
-      //     conn_mat.InsertEntry (seqTs.GetSeq () - 1, node_pos, 1);
-      //   }
       conn_mat.InsertEntry (sender_id, node_pos, 1);
-      // delay_mat.InsertEntry (sender_id, node_pos,
-      //                        Now ().GetSeconds () - header.GetTs ().GetSeconds ());
-      // conn_mat.SetNeighborMatrix ();
+
       std::cout << "node id:" << node_pos << std::endl; //print node received packet
       std::cout << "receive packet: " << std::endl
                 << "  sendTime = " << header.GetTs ().GetSeconds () << "s," << std::endl
@@ -542,7 +484,6 @@ WaveNetDeviceExample::Receive (Ptr<NetDevice> dev, Ptr<const Packet> pkt, uint16
         }
       else
         {
-          // Simulator::Cancel (&WaveNetDeviceExample::Send;
           std::cout << "Node " << node_pos
                     << " already a CM/CH. Receive formation msg: " << std::endl
 
@@ -573,19 +514,17 @@ WaveNetDeviceExample::Receive (Ptr<NetDevice> dev, Ptr<const Packet> pkt, uint16
 
       if ((nodeInfoList[dataHeader.GetSeq ()].clusterId == node_pos))
         {
-          // Simulator::Schedule (Seconds (Now ().GetSeconds ()+0.001),
-          //                      &WaveNetDeviceExample::ReBroadcastPacket, this, SCH1, node_pos, p);
-          Simulator::Schedule (Seconds (0.05), &WaveNetDeviceExample::ReBroadcastPacket, this, SCH1,
+
+          Simulator::Schedule (Seconds (0.05), &ClusteringProtocol::ReBroadcastPacket, this, SCH1,
                                node_pos, p);
           std::cout << " IAM CH" << std::endl;
-          // rebroadcast_count++;
         }
     }
 
   return true;
 }
 void
-WaveNetDeviceExample::ReBroadcastPacket (uint32_t channel, uint64_t sender_id, Ptr<Packet> pkt)
+ClusteringProtocol::ReBroadcastPacket (uint32_t channel, uint64_t sender_id, Ptr<Packet> pkt)
 {
   Ptr<WaveNetDevice> sender = DynamicCast<WaveNetDevice> (devices.Get (sender_id));
   const static uint16_t WSMP_PROT_NUMBER = 0x88DC;
@@ -594,16 +533,13 @@ WaveNetDeviceExample::ReBroadcastPacket (uint32_t channel, uint64_t sender_id, P
   sender->SendX (pkt, bssWildcard, WSMP_PROT_NUMBER, txInfo);
 }
 void
-WaveNetDeviceExample::SendPacketExample ()
+ClusteringProtocol::SendPacketExample ()
 {
   Packet::EnablePrinting ();
   CreateWaveNodeCustomMobility ("position.txt");
 
   const SchInfo schInfo = SchInfo (SCH1, false, EXTENDED_ALTERNATING);
-  // Simulator::Schedule (Seconds (0.0), &WaveNetDevice::StartSch, sender, schInfo);
-  // const TxProfile txProfile = TxProfile (SCH1);
-  // Ptr<WaveNetDevice> sender;
-  // Ptr<WaveNetDevice> receiver;
+
   for (uint64_t i = 0; i != devices.GetN (); ++i)
     {
       Ptr<WaveNetDevice> sender = DynamicCast<WaveNetDevice> (devices.Get (i));
@@ -611,7 +547,7 @@ WaveNetDeviceExample::SendPacketExample ()
       Ptr<WaveNetDevice> receiver = DynamicCast<WaveNetDevice> (devices.Get (i));
       Simulator::Schedule (Seconds (0.0), &WaveNetDevice::StartSch, receiver, schInfo);
       // Simulator::Schedule (Seconds (0.1), &WaveNetDevice::RegisterTxProfile, sender, txProfile);
-      Simulator::Schedule (Seconds (0.01 * (i + 1)), &WaveNetDeviceExample::ScheduleUpdate, this, 1,
+      Simulator::Schedule (Seconds (0.01 * (i + 1)), &ClusteringProtocol::ScheduleUpdate, this, 1,
                            i, SCH1, 0);
 
       Simulator::Schedule (Seconds (BeaconExTime + ClusterFormationTime + DataExchangeTime + 0.06),
@@ -620,16 +556,9 @@ WaveNetDeviceExample::SendPacketExample ()
                            &WaveNetDevice::StopSch, receiver, SCH1);
     }
 
-  // Simulator::Schedule (Seconds (0.4), &WaveNetDeviceExample::SetTwaitArr, this);
-  // SetTwaitArr ();
-  // std::cout << TwaitArr[0] << std::endl;
-  // Simulator::Schedule (Seconds (0.4 + TwaitArr[0]), &WaveNetDeviceExample::Send, this, SCH1, 0, 2);
-
   for (uint64_t j = 0; j != devices.GetN (); ++j)
     {
-      // Simulator::Schedule (Seconds (0.4 + TwaitArr[i]), &WaveNetDeviceExample::SendPacket, this,
-      //                      SCH1, i, 2, 0,0);
-      Simulator::Schedule (Seconds (BeaconExTime), &WaveNetDeviceExample::ScheduleUpdate, this, 2,
+      Simulator::Schedule (Seconds (BeaconExTime), &ClusteringProtocol::ScheduleUpdate, this, 2,
                            j, SCH1, 0);
     }
 
@@ -638,33 +567,27 @@ WaveNetDeviceExample::SendPacketExample ()
       switch (SENDER_NUM)
         {
         case 1:
-          Simulator::Schedule (Seconds (0.06 + (0.1 * t)), &WaveNetDeviceExample::ScheduleUpdate,
+          Simulator::Schedule (Seconds (t0 + (0.1 * t)), &ClusteringProtocol::ScheduleUpdate,
                                this, 3, 0, SCH1, t);
           packetSrc[t] = 0;
           break;
         case 2:
-          Simulator::Schedule (Seconds (0.06 + (0.1 * t)), &WaveNetDeviceExample::ScheduleUpdate,
+          Simulator::Schedule (Seconds (t0 + (0.1 * t)), &ClusteringProtocol::ScheduleUpdate,
                                this, 3, 0, SCH1, t);
           packetSrc[t] = 0;
-          Simulator::Schedule (Seconds (0.11 + (0.1 * t)), &WaveNetDeviceExample::ScheduleUpdate,
-                               this, 3, 1, SCH1, t + PACKET_NUM);
+          Simulator::Schedule (Seconds (t0 + 0.05 + (0.1 * t)),
+                               &ClusteringProtocol::ScheduleUpdate, this, 3, 1, SCH1,
+                               t + PACKET_NUM);
           packetSrc[t + PACKET_NUM] = 1;
           break;
         default:
           break;
-          // Simulator::Schedule (Seconds (0.06 + (0.1 * t)), &WaveNetDeviceExample::ScheduleUpdate,
-          //                      this, 3, 0, SCH1, t);
-          // packetSrc[t] = 0;
-          // Simulator::Schedule (Seconds (0.11 + (0.1 * t)), &WaveNetDeviceExample::ScheduleUpdate,
-          //                      this, 3, 1, SCH1, t + PACKET_NUM);
-          // packetSrc[t + PACKET_NUM] = 1;
         }
     }
 
-  Simulator::Stop (Seconds (0.06 + BeaconExTime + ClusterFormationTime + DataExchangeTime));
+  Simulator::Stop (Seconds (t0 + BeaconExTime + ClusterFormationTime + DataExchangeTime));
   Simulator::Run ();
 
-  // PrintNodeListInfo ();
   UpdateAllNodeInfo ();
   PrintNodeListInfo ();
   conn_mat.PrintMatrix ();
@@ -683,7 +606,7 @@ WaveNetDeviceExample::SendPacketExample ()
   PrintClusterList ();
 }
 void
-WaveNetDeviceExample::PrintNodeListInfo ()
+ClusteringProtocol::PrintNodeListInfo ()
 {
   for (uint64_t i = 0; i < nodeInfoList.size (); i++)
     {
@@ -700,7 +623,7 @@ WaveNetDeviceExample::PrintNodeListInfo ()
     }
 }
 double
-WaveNetDeviceExample::CalculateDistance (uint64_t node1, uint64_t node2)
+ClusteringProtocol::CalculateDistance (uint64_t node1, uint64_t node2)
 {
   Ptr<ConstantVelocityMobilityModel> mob1 =
       nodes.Get (node1)->GetObject<ConstantVelocityMobilityModel> ();
@@ -711,18 +634,16 @@ WaveNetDeviceExample::CalculateDistance (uint64_t node1, uint64_t node2)
 }
 
 double
-WaveNetDeviceExample::CalculateWaitingTime (uint32_t node_id, uint32_t node_num, double distance)
+ClusteringProtocol::CalculateWaitingTime (uint32_t node_id, uint32_t node_num, double distance)
 {
   double centrality_idx = (double) conn_mat.GetNeighborNum1 (node_id) / (node_num - 1);
-  // std::cout << centrality_idx << std::endl;
-  // double distance_idx = (double) (Communication_range - distance) / Communication_range;
-  // double conn_idx = (double) (centrality_idx + distance_idx) / 2;
+
   double conn_idx = (double) (centrality_idx);
   double Twait = (double) (1 - conn_idx) * Twaitmax;
   return Twait;
 }
 void
-WaveNetDeviceExample::SetTwaitArr ()
+ClusteringProtocol::SetTwaitArr ()
 {
   std::cout << "At " << Now ().GetSeconds () << "s" << std::endl;
   for (uint64_t i = 0; i < nodes.GetN (); i++)
@@ -739,14 +660,6 @@ main (int argc, char *argv[])
 {
   CommandLine cmd;
 
-  // if (argc > 1)
-  // {
-  //   uint64_t NODE_NUM = atoi (argv[1]);
-  //   uint64_t SENDER_NUM = atoi (argv[2]);
-  //   uint64_t PACKET_NUM = atoi (argv[3]);
-  //   uint64_t MODE = atoi (argv[1]);
-
-  // }
   uint64_t node_num;
   uint64_t sender_num;
   uint64_t packet_num;
@@ -757,7 +670,7 @@ main (int argc, char *argv[])
 
   cmd.Parse (argc, argv);
   std::cout << node_num << std::endl;
-  WaveNetDeviceExample example (node_num, sender_num, packet_num);
+  ClusteringProtocol example (node_num, sender_num, packet_num);
   std::cout << "run WAVE WSMP routing service case:" << std::endl;
   example.SendPacketExample ();
 
