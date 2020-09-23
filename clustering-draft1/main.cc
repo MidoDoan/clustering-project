@@ -91,7 +91,7 @@ private:
   void ReBroadcastPacket (uint32_t channel, uint64_t sender_id, Ptr<Packet> pkt);
   std::vector<uint64_t> packetSrc;
 
-  void ScheduleUpdate (uint64_t process, uint64_t sender_id, uint64_t channel, uint64_t packet_id);
+  void ScheduleProcess (uint64_t process, uint64_t sender_id, uint64_t channel, uint64_t packet_id);
   uint64_t NODE_NUM;
   uint64_t SENDER_NUM;
   uint64_t PACKET_NUM;
@@ -392,7 +392,7 @@ ClusteringProtocol::SendPacket (uint64_t channel, uint64_t sender_id, uint64_t p
     }
 }
 void
-ClusteringProtocol::ScheduleUpdate (uint64_t process, uint64_t sender_id, uint64_t channel,
+ClusteringProtocol::ScheduleProcess (uint64_t process, uint64_t sender_id, uint64_t channel,
                                       uint64_t packet_id)
 {
   switch (process)
@@ -547,7 +547,7 @@ ClusteringProtocol::SendPacketExample ()
       Ptr<WaveNetDevice> receiver = DynamicCast<WaveNetDevice> (devices.Get (i));
       Simulator::Schedule (Seconds (0.0), &WaveNetDevice::StartSch, receiver, schInfo);
       // Simulator::Schedule (Seconds (0.1), &WaveNetDevice::RegisterTxProfile, sender, txProfile);
-      Simulator::Schedule (Seconds (0.01 * (i + 1)), &ClusteringProtocol::ScheduleUpdate, this, 1,
+      Simulator::Schedule (Seconds (0.01 * (i + 1)), &ClusteringProtocol::ScheduleProcess, this, 1,
                            i, SCH1, 0);
 
       Simulator::Schedule (Seconds (BeaconExTime + ClusterFormationTime + DataExchangeTime + 0.06),
@@ -558,7 +558,7 @@ ClusteringProtocol::SendPacketExample ()
 
   for (uint64_t j = 0; j != devices.GetN (); ++j)
     {
-      Simulator::Schedule (Seconds (BeaconExTime), &ClusteringProtocol::ScheduleUpdate, this, 2,
+      Simulator::Schedule (Seconds (BeaconExTime), &ClusteringProtocol::ScheduleProcess, this, 2,
                            j, SCH1, 0);
     }
 
@@ -567,16 +567,16 @@ ClusteringProtocol::SendPacketExample ()
       switch (SENDER_NUM)
         {
         case 1:
-          Simulator::Schedule (Seconds (t0 + (0.1 * t)), &ClusteringProtocol::ScheduleUpdate,
+          Simulator::Schedule (Seconds (t0 + (0.1 * t)), &ClusteringProtocol::ScheduleProcess,
                                this, 3, 0, SCH1, t);
           packetSrc[t] = 0;
           break;
         case 2:
-          Simulator::Schedule (Seconds (t0 + (0.1 * t)), &ClusteringProtocol::ScheduleUpdate,
+          Simulator::Schedule (Seconds (t0 + (0.1 * t)), &ClusteringProtocol::ScheduleProcess,
                                this, 3, 0, SCH1, t);
           packetSrc[t] = 0;
           Simulator::Schedule (Seconds (t0 + 0.05 + (0.1 * t)),
-                               &ClusteringProtocol::ScheduleUpdate, this, 3, 1, SCH1,
+                               &ClusteringProtocol::ScheduleProcess, this, 3, 1, SCH1,
                                t + PACKET_NUM);
           packetSrc[t + PACKET_NUM] = 1;
           break;
